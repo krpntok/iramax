@@ -156,6 +156,19 @@ header .sub{color:var(--muted);max-width:62ch}
 .mbar .t span{display:block;height:100%;background:var(--blue);border-radius:99px}
 .mbar.p .t span{background:var(--pink)}
 .mbar .l{display:flex;justify-content:space-between;font:500 .75rem var(--font-data);color:var(--muted)}
+.extra{border-top:1px solid var(--line);padding:16px 20px;display:flex;flex-direction:column;gap:10px}
+.extra-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px}
+.extra .tag{display:inline-flex;align-items:center;gap:6px;font:700 .7rem var(--font-data);letter-spacing:.06em;text-transform:uppercase;color:var(--pink)}
+.extra .tag i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.xrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-radius:12px;background:var(--pink-soft)}
+.xrow>div{min-width:0}
+.xdel{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:99px;padding:4px 10px;font:600 .75rem var(--font-body);cursor:pointer;flex:none}
+.xform{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end}
+.xform .xwide{grid-column:1/5}
+.xform .xest{grid-column:5;border:none;background:var(--pink);color:var(--on-pink);font:700 .85rem var(--font-body);padding:9px 14px;border-radius:10px;cursor:pointer}
+.xform .xest:disabled{opacity:.5}
+.xform .xadd{border:none;background:var(--blue);color:var(--on-blue);font:700 .85rem var(--font-body);padding:9px 14px;border-radius:10px;cursor:pointer}
+@media (max-width:620px){.xform{grid-template-columns:repeat(2,minmax(0,1fr))}.xform .xwide{grid-column:1/-1}.xform .xest{grid-column:auto}.xform .xadd{grid-column:auto}}
 .tip{padding:14px 20px;background:var(--blue-soft);border-top:1px solid var(--line);font-size:.92rem}
 .tip strong{color:var(--blue)}
 .empty{padding:28px 20px;color:var(--muted)}
@@ -225,6 +238,21 @@ footer{font-size:.8rem;color:var(--muted)}
         <div class="days" id="b-days"></div>
       </div>
       <div id="b-body"><p class="empty">Chaque matin vers 6 h, ton brief s'affiche ici : footing, work, salle, activité du jour, bien-être, sortie et repas.</p></div>
+      <div class="extra" id="b-extra">
+        <div class="extra-head"><span class="tag"><i></i><span id="x-title">Repas en plus aujourd'hui</span></span><span class="muted" style="font-size:.8rem">Un repas, un snack, une bière : décris-le, Claude estime.</span></div>
+        <div id="x-list"></div>
+        <form id="x-form" class="xform">
+          <label class="xwide">Ce que tu as mangé ou bu<input id="x-name" type="text" maxlength="160" placeholder="ex : 2 Bintang + 1 nasi goreng ayam"></label>
+          <button type="button" class="xest" id="x-est">Estimer</button>
+          <label>kcal<input id="x-kcal" type="number" min="0" max="5000" inputmode="numeric"></label>
+          <label>Prot. g<input id="x-p" type="number" min="0" max="500" inputmode="numeric"></label>
+          <label>Gluc. g<input id="x-c" type="number" min="0" max="800" inputmode="numeric"></label>
+          <label>Lip. g<input id="x-f" type="number" min="0" max="400" inputmode="numeric"></label>
+          <button type="submit" class="xadd">Ajouter</button>
+        </form>
+        <p class="status" id="x-status" role="status"></p>
+      </div>
+      <div id="b-bilan"></div>
     </section>
 
     <section class="wk" aria-label="Ton week-end">
@@ -561,7 +589,9 @@ footer{font-size:.8rem;color:var(--muted)}
       ${card("breakfast","Petit-déj",get("breakfast"))}${card("lunch","Midi",get("lunch"))}
       ${card("snack","Collation",get("snack"),{cls:"wide"})}
       ${card("dinner","Recette du soir",get("dinner"),{cls:"wide"})}
-    </div>${bilanHtml(b, st, ch)}${b.tip?`<div class="tip"><strong>Le geste du jour.</strong> ${esc(b.tip)}</div>`:""}`;
+    </div>`;
+    $("b-bilan").innerHTML = bilanHtml(b, st, ch, rec.extras||[]) + (b.tip?`<div class="tip"><strong>Le geste du jour.</strong> ${esc(b.tip)}</div>`:"");
+    renderExtras();
     if(asking){ const yes = document.querySelector(`.ask[data-ask="${asking}"] .yes`); if(yes) yes.focus({preventScroll:true}); }
   }
   const ITEM = {
@@ -584,8 +614,10 @@ footer{font-size:.8rem;color:var(--muted)}
     if(c && Array.isArray(base.alts) && base.alts[c-1]) return base.alts[c-1];
     return base;
   }
-  function totals(b, st, ch){
-    const t = {eat:0,burn:0,p:0,c:0,f:0,planEat:0,planBurn:0,sport:0,sportPlan:0,out:0,outPlan:0};
+  function totals(b, st, ch, extras){
+    const t = {eat:0,burn:0,p:0,c:0,f:0,planEat:0,planBurn:0,sport:0,sportPlan:0,out:0,outPlan:0,extra:0};
+    (extras||[]).forEach(x=>{ const k = Number(x.kcal)||0; t.eat += k; t.extra += k; t.p += Number(x.p)||0; t.c += Number(x.c)||0; t.f += Number(x.f)||0; });
+    if(!b) return t;
     Object.keys(ITEM).forEach(k=>{
       const base = pick(b,k,0); if(!base) return;
       const kind = ITEM[k].kind;
@@ -599,13 +631,13 @@ footer{font-size:.8rem;color:var(--muted)}
     });
     return t;
   }
-  function bilanHtml(b, st, ch){
-    const t = totals(b, st, ch);
+  function bilanHtml(b, st, ch, extras){
+    const t = totals(b, st, ch, extras);
     const T = {kcal:Number(profile.kcal_target)||2200, p:Number(profile.protein_target)||165, c:Number(profile.carbs_target)||210, f:Number(profile.fat_target)||70};
     const bar = (lab, v, goal, c) => `<div class="mbar ${c||""}"><div class="l"><span>${lab}</span><span>${Math.round(v)} / ${goal} g</span></div><div class="t"><span style="width:${Math.min(100, v/goal*100)}%"></span></div></div>`;
     return `<div class="bilan" aria-label="Bilan du jour">
       <div class="head"><span class="eyebrow">Bilan validé · ${b.date===TODAY?"aujourd'hui":esc(longDate(b.date))}</span><span class="muted" style="font-size:.78rem">Prévu : ≈ ${Math.round(t.planEat)} kcal mangées, ≈ ${Math.round(t.planBurn)} kcal brûlées</span></div>
-      <div class="kpi"><span class="eyebrow">Mangé</span><span class="v num">${Math.round(t.eat)}<small> / ${T.kcal}</small></span></div>
+      <div class="kpi"><span class="eyebrow">Mangé${t.extra?` · dont ${Math.round(t.extra)} en plus`:""}</span><span class="v num">${Math.round(t.eat)}<small> / ${T.kcal}</small></span></div>
       <div class="kpi"><span class="eyebrow">Brûlé</span><span class="v num" style="color:var(--pink)">${Math.round(t.burn)}<small> kcal</small></span></div>
       <div class="kpi"><span class="eyebrow">Sport</span><span class="v num">${t.sport}<small> / ${t.sportPlan}</small></span></div>
       <div class="kpi"><span class="eyebrow">Work · bien-être · sorties</span><span class="v num">${t.out}<small> / ${t.outPlan}</small></span></div>
@@ -631,18 +663,70 @@ footer{font-size:.8rem;color:var(--muted)}
     const items = Object.assign({}, prev.items), choice = Object.assign({}, prev.choice||{});
     if(v==="clear"){ delete items[key]; delete choice[key]; }
     else { items[key] = v; if(v==="done") choice[key] = c||0; else delete choice[key]; }
+    asking = null;
+    commitDone(date, items, choice, prev.extras||[]);
+  }
+  function commitDone(date, items, choice, extras){
     const b = briefs.find(x=>x.date===date);
-    const body = {date, items, choice, updated_at:new Date().toISOString()};
-    if(b){
-      const t = totals(b, items, choice);
-      const picked = {};
-      Object.keys(items).forEach(k=>{ if(items[k]==="done"){ const o = pick(b,k,choice[k]||0); if(o) picked[k] = nameOf2(o); } });
-      Object.assign(body, {kcal_in:Math.round(t.eat), kcal_burn:Math.round(t.burn), protein:Math.round(t.p), carbs:Math.round(t.c), fat:Math.round(t.f), sport_done:t.sport, outings_done:t.out, picked});
-    }
-    doneMap[date] = body; asking = null; renderBrief(); renderWeek();
+    const body = {date, items, choice, extras, updated_at:new Date().toISOString()};
+    const t = totals(b, items, choice, extras);
+    const picked = {};
+    if(b) Object.keys(items).forEach(k=>{ if(items[k]==="done"){ const o = pick(b,k,choice[k]||0); if(o) picked[k] = nameOf2(o); } });
+    Object.assign(body, {kcal_in:Math.round(t.eat), kcal_burn:Math.round(t.burn), protein:Math.round(t.p), carbs:Math.round(t.c), fat:Math.round(t.f), sport_done:t.sport, outings_done:t.out, picked});
+    doneMap[date] = body; renderBrief(); renderExtras(); renderWeek();
     if(!db){ $("week-sum").textContent = "Validation non enregistrée : ouvre la page depuis Claude en étant connecté."; return; }
     writing = writing.then(()=>db.collection("done").doc(date).set(body)).catch(()=>{ $("week-sum").textContent = "La validation n'a pas pu être enregistrée, réessaie."; });
   }
+
+  // ---------- repas en plus ----------
+  let sample = null;
+  const xDate = () => shownBrief || TODAY;
+  function renderExtras(){
+    const d = xDate();
+    const rec = doneMap[d] || {};
+    const xs = rec.extras || [];
+    $("x-title").textContent = d===TODAY ? "Repas en plus aujourd'hui" : "Repas en plus · " + longDate(d);
+    $("x-list").innerHTML = xs.length ? xs.map(x=>`<div class="xrow"><div><strong>${esc(x.name)}</strong><div class="macros"><b class="k">≈ ${Math.round(x.kcal)} kcal</b><b>P ${Math.round(x.p||0)} g</b><b>G ${Math.round(x.c||0)} g</b><b>L ${Math.round(x.f||0)} g</b></div></div><button type="button" class="xdel" data-id="${esc(x.id)}" aria-label="Retirer ${esc(x.name)}">Retirer</button></div>`).join("") : "";
+    if(!briefs.find(b=>b.date===d)) $("b-bilan").innerHTML = xs.length ? bilanHtml({date:d}, {}, {}, xs) : "";
+  }
+  const xNum = id => { const v = $(id).value.trim().replace(",","."); return v===""?null:Number(v); };
+  $("x-est").addEventListener("click", async ()=>{
+    const what = $("x-name").value.trim();
+    if(!what){ $("x-status").textContent = "Écris d'abord ce que tu as mangé ou bu."; $("x-name").focus(); return; }
+    if(!sample){ $("x-status").textContent = "L'estimation automatique n'est pas disponible ici : remplis les chiffres à la main."; return; }
+    $("x-est").disabled = true; $("x-status").textContent = "Estimation en cours…";
+    try{
+      const r = await sample.json(
+        "Tu es nutritionniste. Estime les calories et macronutriments de ce que la personne a mangé ou bu à Bali (portions indonésiennes ou occidentales standard si non précisé). " +
+        "Réponds UNIQUEMENT avec un objet JSON : {\"name\": nom court en français, \"kcal\": nombre, \"p\": protéines en g, \"c\": glucides en g, \"f\": lipides en g, \"note\": hypothèse de portion en une phrase courte}. " +
+        "Exemple : {\"name\":\"2 Bintang\",\"kcal\":290,\"p\":3,\"c\":24,\"f\":0,\"note\":\"2 bouteilles de 330 ml\"}.\n\nCe qu'il a mangé : " + what,
+        {modelTier:"quick"});
+      if(!r || typeof r.kcal!=="number") throw {code:"invalid_json"};
+      $("x-name").value = String(r.name||what);
+      $("x-kcal").value = Math.round(r.kcal); $("x-p").value = Math.round(Number(r.p)||0); $("x-c").value = Math.round(Number(r.c)||0); $("x-f").value = Math.round(Number(r.f)||0);
+      $("x-status").textContent = (r.note ? "Hypothèse : " + r.note + ". " : "") + "Ajuste si besoin, puis ajoute.";
+    }catch(e){
+      const c = e && e.code;
+      $("x-status").textContent = c==="not_granted"||c==="sampling_disabled" ? "Estimation refusée : remplis les chiffres à la main." :
+        c==="rate_limited" ? "Trop de demandes pour l'instant, réessaie dans un moment ou remplis à la main." :
+        "L'estimation n'a pas marché, reformule ou remplis à la main.";
+    }finally{ $("x-est").disabled = false; }
+  });
+  $("x-form").addEventListener("submit", e=>{
+    e.preventDefault();
+    const name = $("x-name").value.trim(), kcal = xNum("x-kcal");
+    if(!name || kcal==null){ $("x-status").textContent = "Il faut au moins un nom et des calories (clique sur Estimer)."; return; }
+    const d = xDate(), prev = doneMap[d] || {date:d, items:{}, choice:{}};
+    const x = {id:"x"+Date.now().toString(36), name, kcal, p:xNum("x-p")||0, c:xNum("x-c")||0, f:xNum("x-f")||0, at:new Date().toISOString()};
+    commitDone(d, Object.assign({}, prev.items), Object.assign({}, prev.choice||{}), (prev.extras||[]).concat([x]));
+    ["x-name","x-kcal","x-p","x-c","x-f"].forEach(id=>$(id).value="");
+    $("x-status").textContent = `Ajouté : ${name}, ≈ ${Math.round(kcal)} kcal.`;
+  });
+  $("x-list").addEventListener("click", e=>{
+    const b = e.target.closest(".xdel"); if(!b) return;
+    const d = xDate(), prev = doneMap[d]; if(!prev) return;
+    commitDone(d, Object.assign({}, prev.items), Object.assign({}, prev.choice||{}), (prev.extras||[]).filter(x=>x.id!==b.dataset.id));
+  });
   function nameOf2(o){ return o.title || o.name || o.text || ""; }
 
   // ---------- form ----------
@@ -720,7 +804,7 @@ footer{font-size:.8rem;color:var(--muted)}
     wkWriting = wkWriting.then(()=>db.collection("weekend_picks").doc(SAT).set(body)).catch(()=>{});
   });
 
-  function renderAll(){ renderProgress(); renderChart(); renderWaist(); renderWeek(); renderBrief(); renderWeekend(); }
+  function renderAll(){ renderProgress(); renderChart(); renderWaist(); renderWeek(); renderBrief(); renderExtras(); renderWeekend(); }
 
   // ---------- onglets ----------
   const VIEWS = ["today","objectif","guide"];
@@ -740,6 +824,7 @@ footer{font-size:.8rem;color:var(--muted)}
 
   (async ()=>{
     if(!window.claude || !window.claude.use) return;
+    window.claude.use("sample").then(s=>{ sample = s; }).catch(()=>{});
     db = await window.claude.use("db");
     if(!db) return;
     db.doc("profile/me").onSnapshot(s=>{ if(s.exists){ profile = Object.assign({}, profile, s.data()); renderAll(); } }, ()=>{});
